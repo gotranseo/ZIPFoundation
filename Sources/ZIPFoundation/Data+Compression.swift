@@ -163,7 +163,7 @@ private extension compression_stream {
 // MARK: - Linux
 
 #else
-import CZlib
+import CZLib
 
 extension Data {
     static func encode(size: Int64, bufferSize: Int, provider: Provider, consumer: Consumer) throws -> CRC32 {

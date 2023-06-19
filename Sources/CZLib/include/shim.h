@@ -11,9 +11,6 @@
 #ifndef zlib_shim_h 
 #define zlib_shim_h
 
-#import <stdio.h>
-#import <zlib.h>
-
 // [zlib] provide 64-bit offset functions if _LARGEFILE64_SOURCE defined
 #ifndef _LARGEFILE64_SOURCE
 #  define _LARGEFILE64_SOURCE 1
@@ -26,5 +23,8 @@
 #ifndef _LFS64_LARGEFILE
 #  define _LFS64_LARGEFILE 1
 #endif
+
+#import <zlib.h>
+#import <stdio.h>
 
 #endif
