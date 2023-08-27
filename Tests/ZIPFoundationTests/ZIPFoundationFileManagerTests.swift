@@ -130,29 +130,16 @@ extension ZIPFoundationTests {
         existingURL.appendPathComponent("test")
         existingURL.appendPathComponent("faust.txt")
         let fileManager = FileManager()
-        do {
-            try fileManager.unzipItem(at: nonexistantArchiveURL, to: ZIPFoundationTests.tempZipDirectoryURL)
-            XCTFail("Error when unzipping non-existant archive not raised")
-        } catch let error as CocoaError {
-            XCTAssertTrue(error.code == CocoaError.fileReadNoSuchFile)
-        } catch { XCTFail("Unexpected error while trying to unzip via fileManager."); return }
-        do {
-            try fileManager.createParentDirectoryStructure(for: existingURL)
-            fileManager.createFile(atPath: existingURL.path, contents: Data(), attributes: nil)
-            try fileManager.unzipItem(at: existingArchiveURL, to: destinationURL)
-            XCTFail("Error when unzipping archive to existing destination not raised")
-        } catch let error as CocoaError {
-            XCTAssertTrue(error.code == CocoaError.fileWriteFileExists)
-        } catch {
-            XCTFail("Unexpected error while trying to unzip via fileManager."); return
-        }
+        XCTAssertCocoaError(try fileManager.unzipItem(at: nonexistantArchiveURL,
+                                                      to: ZIPFoundationTests.tempZipDirectoryURL),
+                            throwsErrorWithCode: .fileReadNoSuchFile)
+        try? fileManager.createParentDirectoryStructure(for: existingURL)
+        fileManager.createFile(atPath: existingURL.path, contents: Data(), attributes: nil)
+        XCTAssertCocoaError(try fileManager.unzipItem(at: existingArchiveURL, to: destinationURL),
+                            throwsErrorWithCode: .fileWriteFileExists)
         let nonZipArchiveURL = self.resourceURL(for: #function, pathExtension: "png")
-        do {
-            try fileManager.unzipItem(at: nonZipArchiveURL, to: destinationURL)
-            XCTFail("Error when trying to unzip non-archive not raised")
-        } catch let error as Archive.ArchiveError {
-            XCTAssertTrue(error == .missingEndOfCentralDirectoryRecord)
-        } catch { XCTFail("Unexpected error while trying to unzip via fileManager."); return }
+        XCTAssertSwiftError(try fileManager.unzipItem(at: nonZipArchiveURL, to: destinationURL),
+                            throws: Archive.ArchiveError.missingEndOfCentralDirectoryRecord)
     }
 
     // On Darwin platforms, we want the same behavior as the system-provided ZIP utilities.
@@ -185,10 +172,11 @@ extension ZIPFoundationTests {
         }
 
         let shellZIPURL = shellZIP(directoryAtURL: testBundleURL)
-        let shellZIPInfos = Set(ZIPInfo.makeZIPInfos(forArchiveAtURL: shellZIPURL, mode: .shellParsing))
-        let builtInZIPInfos = Set(ZIPInfo.makeZIPInfos(forArchiveAtURL: builtInZIPURL, mode: .directoryIteration))
-        let diff = builtInZIPInfos.symmetricDifference(shellZIPInfos)
-        XCTAssert(diff.count == 0)
+        let shellZIPInfos = ZIPInfo.makeZIPInfos(forArchiveAtURL: shellZIPURL, mode: .shellParsing)
+            .sorted { $0.path < $1.path }
+        let builtInZIPInfos = ZIPInfo.makeZIPInfos(forArchiveAtURL: builtInZIPURL, mode: .directoryIteration)
+            .sorted { $0.path < $1.path }
+        XCTAssert(shellZIPInfos == builtInZIPInfos)
 #endif
     }
 }
@@ -282,6 +270,22 @@ private struct ZIPInfo: Hashable {
         case .shellParsing:
             return shellZIPInfos(forArchiveAtURL: url)
         }
+    }
+}
+
+extension ZIPInfo: Equatable {
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        let hasSamePath = lhs.path == rhs.path
+        let hasSameSize = lhs.size == rhs.size
+        // ZIP date/timesstamps have very low resolution. We have to compare with some leeway.
+        let startDate = lhs.modificationDate.addingTimeInterval(-2)
+        let endDate = lhs.modificationDate.addingTimeInterval(+2)
+        let dateRange = startDate...endDate
+        let hasSameDate = dateRange.contains(rhs.modificationDate)
+        return hasSamePath &&
+               hasSameSize &&
+               hasSameDate
     }
 }
 
